@@ -10,10 +10,16 @@ from bokeh import events
 from bokeh.models.widgets import TextInput, Button, Paragraph, CheckboxButtonGroup
 from bokeh.layouts import layout, row, column
 
+def error(msg):
+    output.text += msg
+
 def update_data():
-    stock_data = data.DataReader(name=text_input.value, data_source="google", start=start_date, end=date.today())
-    stock_list.append(p.line(stock_data.index, stock_data['Close'], line_width=2, color="blue", alpha=0.8, legend=text_input.value))
-    checkbox_button_group.labels.append(text_input.value)
+    try:
+        stock_data = data.DataReader(name=text_input.value, data_source="google", start=start_date, end=date.today())
+        stock_list.append(p.line(stock_data.index, stock_data['Close'], line_width=2, color="blue", alpha=0.8, legend=text_input.value))
+        checkbox_button_group.labels.append(text_input.value)
+    except:
+        error("ticker not found")
 
 def update_plot(new):
     switch=checkbox_button_group.active
@@ -26,6 +32,7 @@ def update_plot(new):
 text_input=TextInput(value="word")
 button=Button(label="Generate Text")
 boolean = True
+output = Paragraph()
 lst = ["APPL"]
 checkbox_button_group = CheckboxButtonGroup(labels=lst, active=[0,1,2,3])
 
@@ -44,7 +51,7 @@ stock_list.append(p.line(AAPL.index, AAPL['Close'], line_width=2, color="blue", 
 
 button.on_click(update_data)
 checkbox_button_group.on_click(update_plot)
-widgets = row(text_input, button)
+widgets = column(row(text_input, button), output)
 lay_out = column(widgets, checkbox_button_group)
 
 curdoc().add_root(lay_out)
