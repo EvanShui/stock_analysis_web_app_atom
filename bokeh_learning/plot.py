@@ -4,9 +4,10 @@ import datetime
 from bokeh.plotting import figure, show, output_file, ColumnDataSource
 from bokeh.io import curdoc
 from bokeh.models import HoverTool, OpenURL, TapTool, CustomJS, ColumnDataSource, Tool
-from bokeh.models.widgets import Panel, Tabs
+from bokeh.models.widgets import Panel, Tabs, TextInput, Button, Paragraph, CheckboxButtonGroup
 from datetime import date, timedelta
 from dateutil.relativedelta import *
+from bokeh.layouts import layout, row, column
 from bokeh import events
 import numpy as np
 import pandas as pd
@@ -34,6 +35,14 @@ delta_3_months = date.today() + relativedelta(months=-3)
 delta_6_months = date.today() + relativedelta(months=-6)
 delta_year = date.today() + relativedelta(years=-1)
 delta_5_year = date.today() + relativedelta(years=-5)
+
+##widgets
+text_input=TextInput(value="word")
+button=Button(label="Generate Text")
+output=Paragraph()
+output2=Paragraph()
+lst = ["atvi"]
+checkbox_button_group = CheckboxButtonGroup(labels=lst,active=[0])
 
 
 #list of dates to iterate through to create graphs for different time periods
@@ -80,10 +89,20 @@ def click_trigger(attributes=[], stock_string=[]):
         window.open("https://www.google.com/search?q=" + day + month + string)
     """ % (attributes, stock_string))
 
+# ->
+# updates the checkbox_group to include the strings written in the text_input box_zoom
+def update():
+    output.text += text_input.value
+    lst.append(text_input.value)
+    checkbox_button_group.active.append(checkbox_button_group.active[-1] + 1)
+    checkbox_button_group.labels = lst
+
 #sets the source variable to the CDS object containing stock data
 #sets the CDS_ticker variable to the CDS object containing the stock_ticker
-#source, CDS_ticker = data_to_CDS(stock_ticker, delta_year)
 sources_list = [data_to_CDS(stock_ticker, date) for date in dates]
+
+#sets the figure_list variable to a list of Figure objects each one contains
+#a title from the date_titles list
 figures_list = [figure(x_axis_type='datetime', width=1300, height=400, tools=tools_lst,
            title=title) for title in date_titles]
 fig_source_tuple_list = zip(figures_list, sources_list)
@@ -113,8 +132,14 @@ for fig in figures_list:
     # Triggers the click_trigger function when the mouse clicks on the graph
     fig.js_on_event(events.Tap, click_trigger(attributes=point_attributes, stock_string=["hello"]))
 
+#triggers the update_labels function once the button is clicked
+button.on_click(update)
 tab_list = [Panel(child=fig, title=date_title) for fig, date_title in fig_date_tuple_list]
 tabs = Tabs(tabs=tab_list)
+widgets = row(text_input, button)
+output_row = row(output, output2)
+lay_out = column(widgets,checkbox_button_group)
 
 # Adds the figure object to the document which will be sent to the Bokeh server
+curdoc().add_root(lay_out)
 curdoc().add_root(tabs)
