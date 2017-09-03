@@ -47,6 +47,9 @@ tools_lst = "pan,wheel_zoom,box_zoom,reset"
 #a list of line instances
 instances_list = []
 
+#a counter to iterate through the different colors of the spectra palette
+spectra_index_counter = 1
+
 ##date constants
 #delta 7 days will be designated date for testing multiple graphs single figure
 delta_7_days = date.today() + relativedelta(days=-7)
@@ -92,32 +95,40 @@ def plot(p, source):
 # in the browser window once the Events.tap event is fired. Once triggered,
 # the tab's search query includes the date that the mouse was hovering over
 # as well as the stock_ticker of the graph
-def click_trigger(attributes=[], stock_string=[]):
-    return CustomJS(code="""
+def click_trigger(hovertool, attributes=[], stock_string=[]):
+    return CustomJS(args=dict(hovertool=hovertool), code="""
         var attrs = %s; var string = %s;
         var myDate = new Date(Math.trunc(cb_obj[attrs[0]]));
         var year = myDate.getYear();
         var month = myDate.getMonth() + 1;
         var day = myDate.getDate() + 1;
         var price = cb_obj[attrs[1]];
+        var fkme = Object.entries(hovertool)
+        var company = hovertool["attributes"][1].tooltips[3][2]
+        console.log(Object.entries(hovertool))
         window.open("https://www.google.com/search?q=" + day + month + string)
     """ % (attributes, stock_string))
 
 # ->
 # updates the checkbox_group to include the strings written in the text_input box_zoom
 def button_update():
+    global spectra_index_counter
     temp_list = []
     output.text += text_input.value
     checkbox_button_group.active.append(checkbox_button_group.active[-1] + 1)
     checkbox_button_group.labels.append(text_input.value.upper())
     for indexer in range(0,len(dates)):
         stock_data = data_to_CDS(text_input.value, dates[indexer])
-        line_instance = figures_list[indexer].line('date','price', source=stock_data, line_width=2, color="green", alpha=0.8, legend=stock_data.data['ticker'][0])
+        line_instance = figures_list[indexer].line('date','price',
+            source=stock_data, line_width=2, color=Spectral4[spectra_index_counter],
+            alpha=0.8, legend=stock_data.data['ticker'][0])
         temp_list.append(line_instance)
         figures_list[indexer].add_tools(HoverTool(renderers=[line_instance],
             tooltips=[
                 ("date", "@date{%F}"),
                 ("Price", "$@price{0.2f}"),
+                ("index", "$index"),
+                ("stock_ticker", "@ticker")
                 ],
             formatters={
                 "date": "datetime"
@@ -126,6 +137,7 @@ def button_update():
         ))
     instances_list.append(temp_list)
     output.text += str(len(instances_list))
+    spectra_index_counter += 1
 
 # ->
 # toggles the visibility of the chosen stock data when the checkbox group is clicked on
@@ -146,6 +158,8 @@ for fig, source in fig_source_tuple_list:
     fig.add_tools(HoverTool(tooltips=[
         ("date", "@date{%F}"),
         ("Price", "$@price{0.2f}"),
+        ("index", "$index"),
+        ("stock_ticker", "@ticker")
         ],
         formatters={
             "date": "datetime"
@@ -157,8 +171,11 @@ for fig, source in fig_source_tuple_list:
 instances_list.append(temp_list)
 
 for fig in figures_list:
+    print(fig.tools[-1])
+
+for fig in figures_list:
     # Triggers the click_trigger function when the mouse clicks on the graph
-    fig.js_on_event(events.Tap, click_trigger(attributes=point_attributes, stock_string=["hello"]))
+    fig.js_on_event(events.Tap, click_trigger(fig.tools[-1], attributes=point_attributes, stock_string=["hello"]))
 
 #triggers the button_update function once the button is clicked
 button.on_click(button_update)
