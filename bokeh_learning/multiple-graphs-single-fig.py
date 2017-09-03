@@ -1,14 +1,16 @@
 import pandas as pd
 from bokeh.io import curdoc
 from bokeh.palettes import Spectral4
-from bokeh.plotting import figure, output_file, show
+from bokeh.plotting import figure, output_file, show, ColumnDataSource
 from pandas_datareader import data, wb
-from bokeh.models import CustomJS
+from bokeh.models import CustomJS, HoverTool
 from datetime import date
 import datetime
 from bokeh import events
 from bokeh.models.widgets import TextInput, Button, Paragraph, CheckboxButtonGroup
 from bokeh.layouts import layout, row, column
+import numpy as np
+
 
 def error(msg):
     output.text += msg
@@ -16,8 +18,22 @@ def error(msg):
 def update_data():
     try:
         stock_data = data.DataReader(name=text_input.value, data_source="google", start=start_date, end=date.today())
-        stock_list.append(p.line(stock_data.index, stock_data['Close'], line_width=2, color="blue", alpha=0.8, legend=text_input.value))
+        stock_data = data_to_CDS(text_input.value, start_date)
+        temp = p.line('date', 'price', source=stock_data, line_width=2, color="blue", alpha=0.8, legend=text_input.value)
+        stock_list.append(temp)
         checkbox_button_group.labels.append(text_input.value)
+        p.add_tools(HoverTool(renderers=[temp],
+            tooltips=[
+                ("date", "@date{%F}"),
+                ("Price", "$@price{0.2f}"),
+                ("index", "$index"),
+                ("stock_ticker", "@stock")
+                ],
+            formatters={
+                "date": "datetime"
+            },
+            mode="vline"
+        ))
     except:
         error("ticker not found")
 
@@ -29,15 +45,24 @@ def update_plot(new):
         else:
             stock_list[x].visible=False
 
+def data_to_CDS(stock_ticker, start_date):
+    df = data.DataReader(name=stock_ticker, data_source="google", start=start_date, end=date.today())
+    df['stock_ticker'] = stock_ticker
+    source = ColumnDataSource(data=dict(
+        date=np.array(df['Close'].index, dtype=np.datetime64),
+        price=np.array(df['Close'].values),
+        stock=np.array(df['stock_ticker'])
+    ))
+    return source
+
 text_input=TextInput(value="word")
 button=Button(label="Generate Text")
 boolean = True
 output = Paragraph()
-lst = ["APPL"]
-checkbox_button_group = CheckboxButtonGroup(labels=lst, active=[0,1,2,3])
+checkbox_button_group = CheckboxButtonGroup(labels=["APPL"], active=[0,1,2,3])
 
 start_date = datetime.datetime(2016, 3, 1)
-AAPL = data.DataReader(name="aapl", data_source="google", start=start_date, end=date.today())
+AAPL = data_to_CDS("aapl", start_date)
 IBM = data.DataReader(name="IBM", data_source="google", start=start_date, end=date.today())
 MSFT = data.DataReader(name="MSFT", data_source="google", start=start_date, end=date.today())
 GOOG = data.DataReader(name="GOOG", data_source="google", start=start_date, end=date.today())
@@ -45,9 +70,24 @@ stock_list =[]
 
 p = figure(plot_width=800, plot_height=250, x_axis_type="datetime")
 p.title.text = 'Click on legend entries to hide the corresponding lines'
-
 #for data, name, color in zip([AAPL, IBM, MSFT, GOOG], ["AAPL", "IBM", "MSFT", "GOOG"], Spectral4):
-stock_list.append(p.line(AAPL.index, AAPL['Close'], line_width=2, color="blue", alpha=0.8, legend="AAPL"))
+aapl_line = p.line('date', 'price', source=AAPL, line_width=2, color="blue", alpha=0.8, legend="AAPL")
+stock_list.append(aapl_line)
+
+p.add_tools(HoverTool(renderers=[aapl_line],
+    tooltips=[
+        ("date", "@date{%F}"),
+        ("Price", "$@price{0.2f}"),
+        ("index", "$index"),
+        ("stock_ticker", "@stock")
+        ],
+    formatters={
+        "date": "datetime"
+    },
+    mode="vline"
+))
+
+
 
 button.on_click(update_data)
 checkbox_button_group.on_click(update_plot)
