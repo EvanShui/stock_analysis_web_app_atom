@@ -10,6 +10,7 @@ from bokeh.layouts import column, row
 from bokeh.models.callbacks import CustomJS
 import sys
 import time
+import threading
 
 class ListStream:
     def __init__(self):
@@ -65,5 +66,4 @@ f.on_event(events.Tap, event_callback)
 
 layout = column(f)
 
-#write the plot in the figure object
 curdoc().add_root(layout)
