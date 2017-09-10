@@ -25,6 +25,8 @@ from urllib.request import Request, urlopen
 import urllib.request
 import re
 
+
+
 #HTML template to build the flask app
 SIMPLE_HTML_TEMPLATE = Template('''
 <!DOCTYPE html>
@@ -36,6 +38,7 @@ SIMPLE_HTML_TEMPLATE = Template('''
         <style>
             .scroll-box {
                 overflow:auto;
+                float: right;
             }
         </style>
     </head>
@@ -45,6 +48,8 @@ SIMPLE_HTML_TEMPLATE = Template('''
     </body>
 </html>
 ''')
+
+
 
 #string datetime -> CDS
 #creates a dataframe object which includes stock info about the given stock ticker
@@ -78,6 +83,9 @@ date_titles = ["week", "month", "3 months", "6 months", "year", "5 years"]
 
 #a list of tool that will be displayed along side the figure
 tools_lst = "pan,wheel_zoom,box_zoom,reset"
+
+#a list of dimensions for the divs
+div_dim_lst = [500] * 6
 
 #a list of line instances
 instances_list = []
@@ -115,10 +123,17 @@ fig_source_tuple_list = zip(figures_list, sources_list)
 fig_date_titles_list = zip(figures_list, date_titles)
 fig_datetime_list = zip(figures_list, dates)
 
+#for i in layout_list:
+    #print(i.children[0].children[0])
+#for i in layout_list:
+#    print(i.children[0].children[1].children[0])
+#for i in div_list:
+#    print(i)
+
+
 #added the features so that when the user's mouse hovers over a data point, it
 #will display date, price, index, and the stock ticker
 temp_list = []
-
 
 # Figure CDS ->
 # Plots the data as a scatter plot and a line graph on the figure p.
@@ -208,60 +223,45 @@ def web_scraper(day, month, year):
             print("triggered")
     return lst
 
-#generating another URL for flask, this time to search the x-coordinate of
-#the mouse and send back the results
-@app.route("/get_coord",methods=['POST'])
-def get_coord():
-    app.logger.info(
-        "Browser sent the following via AJAX: %s", json.dumps(request.form))
-    #the data retrieved is in the form of a string, turn it into float to perform arithmetic operations
-    variable_to_return = float(request.form['x_coord'])
-    day = request.form['day']
-    month = request.form['month']
-    year = request.form['year']
-    #creates the list of data given the x-coordinate of the mouse and assigns the resulting list
-    list_to_return = web_scraper(day, month, year)
-    app.logger.info(
-        "x_coord %r", (variable_to_return))
-    app.logger.info(
-        "date %d %d %d", (day, month, year))
-    #app.logger.info(
-    #    "list %r",(list_to_return))
-    #returns a list in form of json
-    return jsonify({variable_to_return: list_to_return})
+for fig, source in fig_source_tuple_list:
+    fig.add_tools(HoverTool(tooltips=[
+        ("date", "@date{%F}"),
+        ("Price", "$@price{0.2f}"),
+        ("index", "$index"),
+        ("stock_ticker", "@ticker")
+        ],
+        formatters={
+            "date": "datetime"
+        },
+        mode="vline"
+    ))
+    #calls the plot function to graph the source data
+    temp_list.append(plot(fig, source))
+instances_list.append(temp_list)
 
-#main app route
-@app.route("/")
-#essentially the main function of this program to create bokeh diagrams
-def simple():
-    div = Div(text="""Your <a href="https://en.wikipedia.org/wiki/HTML">HTML</a>-supported text is initialized with the <b>text</b> argument.  The
+#print(instances_list)
+
+#triggers the button_update function once the button is clicked
+button.on_click(button_update)
+
+#triggers the plot_update function once any of the checkbox buttons are clicked
+checkbox_button_group.on_click(plot_update)
+
+div_list = [Div(text="""Your <a href="https://en.wikipedia.org/wiki/HTML">HTML</a>-supported text is initialized with the <b>text</b> argument.  The
 remaining div arguments are <b>width</b> and <b>height</b>. For this example, those values
-are <i>200</i> and <i>100</i> respectively.""", width=500, height=500)
-    div.css_classes = ["scroll-box"]
+are <i>200</i> and <i>100</i> respectively.""", width=x, height=x) for x in div_dim_lst]
 
+def test_callback():
+    return CustomJS(code="console.log('hello')")
 
-    for fig, source in fig_source_tuple_list:
-        fig.add_tools(HoverTool(tooltips=[
-            ("date", "@date{%F}"),
-            ("Price", "$@price{0.2f}"),
-            ("index", "$index"),
-            ("stock_ticker", "@ticker")
-            ],
-            formatters={
-                "date": "datetime"
-            },
-            mode="vline"
-        ))
-        #calls the plot function to graph the source data
-        temp_list.append(plot(fig, source))
-    instances_list.append(temp_list)
-
-    tap_callback = CustomJS(args=dict(div=div),code="""
+def tap_callback(div_arg):
+    return CustomJS(args=dict(div=div_arg),code="""
     var x_coordinate = cb_obj['x']
     var myDate = new Date(Math.trunc(cb_obj['x']));
     var year = myDate.getYear() - 100;
     var month = myDate.getMonth() + 1;
     var day = myDate.getDate() + 1;
+    console.log("hello")
     jQuery.ajax({
         type: 'POST',
         url: '/get_coord',
@@ -290,26 +290,73 @@ are <i>200</i> and <i>100</i> respectively.""", width=500, height=500)
         }
     });
     """)
+layout_list = []
+fig_div_list = zip(figures_list, div_list)
+for x in fig_div_list:
+    x[0].js_on_event('tap',tap_callback(x[1]))
+    print(x)
+    layout_list.append(layout([[x[0], x[1]]], sizing_mode='fixed'))
 
-    for fig in figures_list:
-        # Triggers the click_trigger function when the mouse clicks on the graph
-        fig.js_on_event('tap', tap_callback)
+#for fig, div_arg in fig_div_list:
+    # Triggers the click_trigger function when the mouse clicks on the graph
+    #fig.js_on_event('tap', test_callback)
 
-    #triggers the button_update function once the button is clicked
-    button.on_click(button_update)
 
-    #triggers the plot_update function once any of the checkbox buttons are clicked
-    checkbox_button_group.on_click(plot_update)
 
-    tab_list = [Panel(child=fig, title=date_title) for fig, date_title in fig_date_titles_list]
-    tabs = Tabs(tabs=tab_list)
+
+
+
+for y in fig_div_list:
+    print(y)
+
+
+#layout_list = [layout([x[0], x[1]], sizing_mode='fixed') for x in fig_div_list]
+print(layout_list)
+layout_date_titles_list = zip(layout_list, date_titles)
+
+tab_list = [Panel(child=lay_arg, title=date_title) for lay_arg, date_title in layout_date_titles_list]
+print(tab_list)
+tabs = Tabs(tabs=tab_list)
+#generating another URL for flask, this time to search the x-coordinate of
+#the mouse and send back the results
+@app.route("/get_coord",methods=['POST'])
+def get_coord():
+    app.logger.info(
+        "Browser sent the following via AJAX: %s", json.dumps(request.form))
+    #the data retrieved is in the form of a string, turn it into float to perform arithmetic operations
+    variable_to_return = float(request.form['x_coord'])
+    day = request.form['day']
+    month = request.form['month']
+    year = request.form['year']
+    #creates the list of data given the x-coordinate of the mouse and assigns the resulting list
+    list_to_return = web_scraper(day, month, year)
+    app.logger.info(
+        "x_coord %r", (variable_to_return))
+    app.logger.info(
+        "date %d %d %d", (day, month, year))
+    #app.logger.info(
+    #    "list %r",(list_to_return))
+    #returns a list in form of json
+    return jsonify({variable_to_return: list_to_return})
+
+#main app route
+@app.route("/")
+#essentially the main function of this program to create bokeh diagrams
+def simple():
+    #div = Div(text="""Your <a href="https://en.wikipedia.org/wiki/HTML">HTML</a>-supported text is initialized with the <b>text</b> argument.  The
+    #remaining div arguments are <b>width</b> and <b>height</b>. For this example, those values
+    #are <i>200</i> and <i>100</i> respectively.""", width=500, height=500)
+    #    div.css_classes = ["scroll-box"]
+
+    #for fig, div in fig_div_list:
+    #    div.css_classes=["scroll-box"]
 
     #for fig in figures_list:
     #    print(fig.tools[-1])
 
     widgets = column(row(text_input, button),output, checkbox_button_group)
-    layout = column(widgets, row(column(tabs), div))
-    script, div = components(layout)
+    lay_out = column(widgets, tabs)
+    script, div = components(tabs)
     html = SIMPLE_HTML_TEMPLATE.render(
         plot_script=script,
         plot_div=div,
