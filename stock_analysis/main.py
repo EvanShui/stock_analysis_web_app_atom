@@ -1,107 +1,322 @@
+#importing libraries
 from pandas_datareader import data, wb
 import datetime
 from bokeh.plotting import figure, show, output_file, ColumnDataSource
-from bokeh.io import output_notebook
-from bokeh.models import HoverTool, OpenURL, TapTool, CustomJS, ColumnDataSource
-from bokeh.models.widgets import Panel, Tabs
+from bokeh.io import curdoc
+from bokeh.models import HoverTool, OpenURL, TapTool, CustomJS, ColumnDataSource, Tool, Div, Button
+from bokeh.models.widgets import Panel, Tabs, TextInput, Button, Paragraph, CheckboxButtonGroup
 from datetime import date, timedelta
 from dateutil.relativedelta import *
+from bokeh.layouts import layout, row, column, widgetbox
 from bokeh import events
 import numpy as np
 import pandas as pd
 import requests
+from bokeh.palettes import Spectral4
+import json
+from flask import Flask, jsonify, request
+from jinja2 import Template
+from bokeh.embed import components
+from bokeh.resources import INLINE
+from bokeh.util.string import encode_utf8
+import math
+from bs4 import BeautifulSoup
+from urllib.request import Request, urlopen
+import urllib.request
+import re
 
-def new_window():
-    return CustomJS(code="""
-        window.open("https://www.google.com/search?q=")
-    """)
+#HTML template to build the flask app
+SIMPLE_HTML_TEMPLATE = Template('''
+<!DOCTYPE html>
+<html>
+    <head>
+        <script src="https://code.jquery.com/jquery-3.1.0.min.js"></script>
+        {{ js_resources }}
+        {{ css_resources }}
+        <style>
+            .scroll-box {
+                overflow:auto;
+            }
+        </style>
+    </head>
+    <body>
+    {{ plot_div }}
+    {{ plot_script }}
+    </body>
+</html>
+''')
 
+#string datetime -> CDS
+#creates a dataframe object which includes stock info about the given stock ticker
+#such as closing and opening price between the datetime object that is passed
+#to the function and the current date. Returns a column data source object that
+#contains all of said data.
 def data_to_CDS(stock_ticker, start_date):
     df = data.DataReader(name=stock_ticker, data_source="google", start=start_date, end=date.today())
     df['stock_ticker'] = stock_ticker
     source = ColumnDataSource(data=dict(
         date=np.array(df['Close'].index, dtype=np.datetime64),
         price=np.array(df['Close'].values),
-        stock=np.array(df['stock_ticker'])
+        ticker=np.array(df['stock_ticker'])
     ))
     return source
 
+#constants
 
-def plot(p, source):
-    p.line('date', 'price', source=source, line_width=2)
-    p.circle('date', 'price', size=5, source=source, fill_color='white')
+#creating the flask app
+app = Flask(__name__)
 
+#to be used in tangent with the click_trigger function to pass the x and y
+#coordinates of the mouse.
+point_attributes = ['x','y','sx','sy']
 
-def string_to_datetime(string):
-    return datetime.datetime.fromtimestamp(string / 1e3)
+#the stock ticker that is used to test for stock
+stock_ticker="atvi"
 
-def get_symbol(symbol):
-    url = "http://d.yimg.com/autoc.finance.yahoo.com/autoc?query={}&region=1&lang=en".format(symbol)
+#a list of titles for all of the tabs
+date_titles = ["week", "month", "3 months", "6 months", "year", "5 years"]
 
-    result = requests.get(url).json()
+#a list of tool that will be displayed along side the figure
+tools_lst = "pan,wheel_zoom,box_zoom,reset"
 
-    for x in result['ResultSet']['Result']:
-        if x['symbol'] == symbol:
-            return x['name']
+#a list of line instances
+instances_list = []
 
+#a counter to iterate through the different colors of the spectra palette
+spectra_index_counter = 1
+
+##date constants
+#delta 7 days will be designated date for testing multiple graphs single figure
 delta_7_days = date.today() + relativedelta(days=-7)
 delta_month = date.today() + relativedelta(months=-1)
 delta_3_months = date.today() + relativedelta(months=-3)
 delta_6_months = date.today() + relativedelta(months=-6)
 delta_year = date.today() + relativedelta(years=-1)
 delta_5_year = date.today() + relativedelta(years=-5)
+
+##widgets
+text_input=TextInput(value="ticker")
+button=Button(label="Submit")
+output=Paragraph()
+checkbox_button_group = CheckboxButtonGroup(labels=["ATVI"],active=[0])
+
+#list of dates to iterate through to create graphs for different time periods
 dates = [delta_7_days, delta_month, delta_3_months, delta_6_months, delta_year, delta_5_year]
 
-date_titles = ["week", "month", "3 months", "6 months", "year", "5 years"]
-start = datetime.datetime(2016, 3, 1)
-#url ="https://www.google.com/search?q="
-
+#sets the source variable to the CDS object containing stock data
+#sets the CDS_ticker variable to the CDS object containing the stock_ticker
 sources_list = [data_to_CDS(stock_ticker, date) for date in dates]
-figures_list = [figure(x_axis_type='datetime', width=1500, height=400, tools="tap",
+
+#sets the figure_list variable to a list of Figure objects each one contains
+#a title from the date_titles list
+figures_list = [figure(x_axis_type='datetime', width=700, height=500, tools=tools_lst,
            title=title) for title in date_titles]
 fig_source_tuple_list = zip(figures_list, sources_list)
-fig_date_tuple_list = zip(figures_list, date_titles)
+fig_date_titles_list = zip(figures_list, date_titles)
+fig_datetime_list = zip(figures_list, dates)
 
-for fig, source in fig_source_tuple_list:
-    fig.add_tools(HoverTool(tooltips=[
-        ("date", "@date{%F}"),
-        ("Price", "$@price{0.2f}"),
-        ("index", "$index"),
-        ("stock_ticker", "@stock")
-    ],
-        formatters={
-            "date": "datetime"
+#added the features so that when the user's mouse hovers over a data point, it
+#will display date, price, index, and the stock ticker
+temp_list = []
+
+
+# Figure CDS ->
+# Plots the data as a scatter plot and a line graph on the figure p.
+def plot(p, source):
+    return (p.line('date', 'price', source=source, line_width=2))
+    #p.circle('date', 'price', size=5, source=source, fill_color='white')
+
+# CDS list -> CustomJS
+# Returns a CustomJS object that once implemented, will open up a new tab
+# in the browser window once the Events.tap event is fired. Once triggered,
+# the tab's search query includes the date that the mouse was hovering over
+# as well as the stock_ticker of the graph
+
+# ->
+# updates the checkbox_group to include the strings written in the text_input box_zoom
+def button_update():
+    global spectra_index_counter
+    temp_list = []
+    output.text += text_input.value
+    checkbox_button_group.active.append(checkbox_button_group.active[-1] + 1)
+    checkbox_button_group.labels.append(text_input.value.upper())
+    for indexer in range(0,len(dates)):
+        stock_data = data_to_CDS(text_input.value, dates[indexer])
+        line_instance = figures_list[indexer].line('date','price',
+            source=stock_data, line_width=2, color=Spectral4[spectra_index_counter],
+            alpha=0.8, legend=stock_data.data['ticker'][0])
+        temp_list.append(line_instance)
+        figures_list[indexer].add_tools(HoverTool(renderers=[line_instance],
+            tooltips=[
+                ("date", "@date{%F}"),
+                ("Price", "$@price{0.2f}"),
+                ("index", "$index"),
+                ("stock_ticker", "@ticker")
+                ],
+            formatters={
+                "date": "datetime"
+            },
+            mode="vline"
+        ))
+    instances_list.append(temp_list)
+    output.text += str(len(instances_list))
+    spectra_index_counter += 1
+
+# ->
+# toggles the visibility of the chosen stock data when the checkbox group is clicked on
+def plot_update(new):
+    switch=checkbox_button_group.active #[0]
+    for x in range(0,len(instances_list)):
+        if x in switch:
+            for instance in instances_list[x]:
+                instance.visible = True
+        else:
+            for instance in instances_list[x]:
+                instance.visible = False
+
+def web_scraper(day, month, year):
+    lst = []
+    opener = urllib.request.build_opener()
+    #use Mozilla because can't access chrome due to insufficient privileges
+    #only use for google
+    #opener.addheaders = [('User-agent', 'Mozilla/5.0')]
+    #url for search query
+    url = "http://www.marketwatch.com/search?q=ATVI&m=Ticker&rpp=15&mp=2005&bd=true&bd=false&bdv=" + str(month) + "%2F" + str(day) + "%2F20" + str(year) + "&rs=true"
+    page = opener.open(url)
+    soup = BeautifulSoup(page, "html.parser")
+    #use beauitful soup to find all divs with the r class, which essentially
+    #is the same as finding all of the divs that contain each individiaul search
+
+    soup_tuple_list = zip(soup.findAll(class_="searchresult"), soup.findAll(class_="deemphasized")[1:-1])
+    #iterating through a tags which includes title and links
+    #for x in soup.findAll(class_="searchresult"):
+    #appends the title of each individual search result to a list
+    #    lst.append(x.a.encode("utf-8"))
+    #iterating through time published and publishing company
+    #gets rid of the prev strings at the beginning and end of the resulting list
+    for article, date in soup_tuple_list:
+        try:
+            time = date.contents[1][5:]
+            print(time)
+            time = re.findall(r'\|.[A-Za-z ]*', time)[0]
+            info = date.contents[0].string + time
+            article.a['target']="_blank"
+            lst.append((article.a.encode("utf-8"),info))
+        except:
+            article.a['target']="_blank"
+            lst.append((article.a.encode("utf-8"),info))
+            print("triggered")
+    return lst
+
+#generating another URL for flask, this time to search the x-coordinate of
+#the mouse and send back the results
+@app.route("/get_coord",methods=['POST'])
+def get_coord():
+    app.logger.info(
+        "Browser sent the following via AJAX: %s", json.dumps(request.form))
+    #the data retrieved is in the form of a string, turn it into float to perform arithmetic operations
+    variable_to_return = float(request.form['x_coord'])
+    day = request.form['day']
+    month = request.form['month']
+    year = request.form['year']
+    #creates the list of data given the x-coordinate of the mouse and assigns the resulting list
+    list_to_return = web_scraper(day, month, year)
+    app.logger.info(
+        "x_coord %r", (variable_to_return))
+    app.logger.info(
+        "date %d %d %d", (day, month, year))
+    #app.logger.info(
+    #    "list %r",(list_to_return))
+    #returns a list in form of json
+    return jsonify({variable_to_return: list_to_return})
+
+#main app route
+@app.route("/")
+#essentially the main function of this program to create bokeh diagrams
+def simple():
+    div = Div(text="""Your <a href="https://en.wikipedia.org/wiki/HTML">HTML</a>-supported text is initialized with the <b>text</b> argument.  The
+remaining div arguments are <b>width</b> and <b>height</b>. For this example, those values
+are <i>200</i> and <i>100</i> respectively.""", width=500, height=500)
+    div.css_classes = ["scroll-box"]
+
+
+    for fig, source in fig_source_tuple_list:
+        fig.add_tools(HoverTool(tooltips=[
+            ("date", "@date{%F}"),
+            ("Price", "$@price{0.2f}"),
+            ("index", "$index"),
+            ("stock_ticker", "@ticker")
+            ],
+            formatters={
+                "date": "datetime"
+            },
+            mode="vline"
+        ))
+        #calls the plot function to graph the source data
+        temp_list.append(plot(fig, source))
+    instances_list.append(temp_list)
+
+    tap_callback = CustomJS(args=dict(div=div),code="""
+    var x_coordinate = cb_obj['x']
+    var myDate = new Date(Math.trunc(cb_obj['x']));
+    var year = myDate.getYear() - 100;
+    var month = myDate.getMonth() + 1;
+    var day = myDate.getDate() + 1;
+    jQuery.ajax({
+        type: 'POST',
+        url: '/get_coord',
+        data: {"x_coord": x_coordinate, "day":day, "month":month,"year":year},
+        dataType: 'json',
+        success: function (json_from_server) {
+            //console.log(JSON.stringify(json_from_server));
+            //console.log(json_from_server[x_coordinate])
+            //assigns the list that was sent from the flask route /get_new_data
+            div.text = ""
+            var list = json_from_server[x_coordinate]
+            //iterates through the list and adds each element (the search query title)
+            //to div
+            for(var i =0; i < list.length; i++){
+                var article = list[i][0]
+                var info = list[i][1]
+                var line = "<p>" + article + "<br>" + info + "</p>"
+                var lines = div.text.concat(line)
+                div.text = lines
+            }
+            console.log("loading")
         },
-        mode="vline"
-    ))
-    plot(fig, source)
-    #fig.select(type=TapTool).callback = OpenURL(url=url)
+        error: function() {
+            alert("Oh no, something went wrong. Search for an error " +
+                  "message in Flask log and browser developer tools.");
+        }
+    });
+    """)
 
+    for fig in figures_list:
+        # Triggers the click_trigger function when the mouse clicks on the graph
+        fig.js_on_event('tap', tap_callback)
 
-tab_list = [Panel(child=fig, title=date_title) for fig, date_title in fig_date_tuple_list]
-tabs = Tabs(tabs=tab_list)
-#output_file("python_analyzer.html")
-#show(tabs)
-point_attributes = ['x','y','sx','sy']
+    #triggers the button_update function once the button is clicked
+    button.on_click(button_update)
 
+    #triggers the plot_update function once any of the checkbox buttons are clicked
+    checkbox_button_group.on_click(plot_update)
 
+    tab_list = [Panel(child=fig, title=date_title) for fig, date_title in fig_date_titles_list]
+    tabs = Tabs(tabs=tab_list)
 
+    #for fig in figures_list:
+    #    print(fig.tools[-1])
 
+    widgets = column(row(text_input, button),output, checkbox_button_group)
+    layout = column(widgets, row(column(tabs), div))
+    script, div = components(layout)
+    html = SIMPLE_HTML_TEMPLATE.render(
+        plot_script=script,
+        plot_div=div,
+        js_resources=INLINE.render_js(),
+        css_resources=INLINE.render_css())
+    #returns the rendered html template with the bokeh graph
+    return encode_utf8(html)
 
-
-
-
-def test_window(attributes=[]):
-    return CustomJS(args=dict(tick=stock_ticker_CDS), code="""
-        var attrs = %s;
-        var myDate = new Date(Math.trunc(cb_obj[attrs[0]]) * 1000);
-        var price = cb_obj[attrs[1]]
-        var tick = cb_obj[attrs[3]]
-        window.open("https://www.google.com/search?q=" + myDate + price)
-    """ % (attributes))
-
-for fig in figures_list:
-    fig.js_on_event(events.Tap, test_window(attributes=point_attributes))
-
-output_file("python_analyzer.html")
-show(tabs)
+#runs on local server @ port 5002
+app.run(debug=True, host="127.0.0.1", port=5002)
