@@ -1,4 +1,3 @@
-#Making a basic Bokeh line graph
 #importing Bokeh
 import pandas_datareader.data as web
 import datetime
@@ -64,7 +63,7 @@ date_titles = ["week", "month", "3 months", "6 months", "1 year", "3 years"]
 
 text_input = TextInput()
 button = Button(label="main")
-button2 = Button()
+button2 = Button(label="submit")
 output=Paragraph()
 output.text = "goodbye"
 radio_button_group = RadioButtonGroup(
@@ -152,6 +151,7 @@ div.css_classes = ["scroll-box"]
 
 button_callback = CustomJS(args=dict(radio_button_group = radio_button_group, div=div, text_input=text_input, output=output, source=source),code="""
      //var plot_data = source.data;
+     output.text = ''
      div.text=''
      var ticker = text_input.value;
      jQuery.ajax({
@@ -168,8 +168,7 @@ button_callback = CustomJS(args=dict(radio_button_group = radio_button_group, di
             radio_button_group.active = 5
         },
         error: function() {
-            alert("Oh no, something went wrong. Search for an error " +
-                  "message in Flask log and browser developer tools.");
+            output.text = "Invalid Ticker"
         }
     });
     """ % (stock_ticker))
@@ -235,12 +234,9 @@ button2.js_on_event(ButtonClick, button_callback)
 
 radio_button_group.callback = radio_button_callback
 
-lay_out = column(radio_button_group, row(text_input, button2), row(p,div))
+lay_out = column(radio_button_group, row(text_input, button2), output, row(p,div))
 
 js,div=components(lay_out, INLINE)
 
 cdn_js=INLINE.render_js()
 cdn_css=INLINE.render_css()
-
-#write the plot in the figure object
-#show(f)

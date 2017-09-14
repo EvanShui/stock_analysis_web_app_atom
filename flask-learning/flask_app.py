@@ -38,13 +38,12 @@ def get_y_data():
     app.logger.info(
         "Browser sent the following via AJAX: %s", json.dumps(request.form))
     ticker = request.form['ticker_sent']
-    test_ticker = "atvi"
     app.logger.info(
         "Original basicline ticker: %s", BasicLine.stock_ticker)
-    BasicLine.stock_ticker = test_ticker
+    BasicLine.stock_ticker = ticker
     app.logger.info(
         "New basicline ticker: %s", BasicLine.stock_ticker)
-    data, meta_data = get_data(test_ticker)
+    data, meta_data = get_data(ticker)
     BasicLine.data = data
     sources_y_list = data_to_CDS_y(data, dates[5])
     #app.logger.info(
@@ -81,16 +80,10 @@ def get_articles():
         day = '1';
         month = int(month) + 1
         month = str(month)
-    app.logger.info(
-        "day: %s month: %s year: %s", (day, month, year))
     #creates the list of data given the x-coordinate of the mouse and assigns the resulting list
     list_to_return = web_scraper(day, month, year)
     app.logger.info(
         "x_coord %r", (variable_to_return))
-    app.logger.info(
-        "date %d %d %d", (day, month, year))
-    #app.logger.info(
-    #    "list %r",(list_to_return))
     #returns a list in form of json
     return jsonify({variable_to_return: list_to_return})
 
