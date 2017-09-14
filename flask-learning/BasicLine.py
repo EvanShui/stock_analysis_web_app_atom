@@ -1,5 +1,4 @@
 #Making a basic Bokeh line graph
-
 #importing Bokeh
 import pandas_datareader.data as web
 import datetime
@@ -68,6 +67,8 @@ button = Button(label="main")
 button2 = Button()
 output=Paragraph()
 output.text = "goodbye"
+radio_button_group = RadioButtonGroup(
+        labels=["1w", "1m", "3m", "6m", "1y", "5y"], active=5)
 
 # str -> lst
 # Hard coded to specifically scrape the google website and returns a list of
@@ -94,11 +95,14 @@ def web_scraper(day, month, year):
     #iterating through time published and publishing company
     #gets rid of the prev strings at the beginning and end of the resulting list
     for article, date in soup_tuple_list:
-        time = date.contents[1][5:]
-        time = re.findall(r'\|.[A-Za-z ]*', time)[0]
-        info = date.contents[0].string + time
-        article.a['target']="_blank"
-        lst.append((article.a.encode("utf-8"),info))
+        try:
+            time = date.contents[1][5:]
+            time = re.findall(r'\|.[A-Za-z ]*', time)[0]
+            info = date.contents[0].string + time
+            article.a['target']="_blank"
+            lst.append((article.a.encode("utf-8"),info))
+        except:
+            continue
     return lst
 
 def data_to_CDS(stock_ticker, data, start_date):
@@ -124,10 +128,11 @@ def y_min_max(data, index):
     adjusted_data = data.tail(delta_days)
     maxVal = adjusted_data['close'].max()
     minVal = adjusted_data['close'].min()
-    print(maxVal, minVal)
+    if minVal < 0:
+        minVal = 0
     return ((minVal - 5), (maxVal + 5))
 
-p = figure(x_axis_type="datetime", tools=tools_lst)
+p = figure(x_axis_type="datetime", tools=tools_lst, width=900, height = 500)
 source = data_to_CDS(stock_ticker, data, delta_5_year)
 p.line('date', 'price', source=source, line_width=2)
 
@@ -142,15 +147,10 @@ p.add_tools(HoverTool(tooltips=[
     mode="vline"
 ))
 
-div = Div(text="""Your <a href="https://en.wikipedia.org/wiki/HTML">HTML</a>-supported text is initialized with the <b>text</b> argument.  The
-remaining div arguments are <b>width</b> and <b>height</b>. For this example, those values
-are <i>200</i> and <i>100</i> respectively.""", width=500, height=500)
-#div.css_classes = ["scroll-box"]
+div = Div(text="""Click on the graph to display a list of financial articles on and before that date""", width=500, height=500)
+div.css_classes = ["scroll-box"]
 
-def button_click():
-    output.text += "hello"
-
-button_callback = CustomJS(args=dict(div=div, text_input=text_input, output=output, source=source),code="""
+button_callback = CustomJS(args=dict(radio_button_group = radio_button_group, div=div, text_input=text_input, output=output, source=source),code="""
      //var plot_data = source.data;
      div.text=''
      var ticker = text_input.value;
@@ -160,13 +160,12 @@ button_callback = CustomJS(args=dict(div=div, text_input=text_input, output=outp
         data: {"ticker_sent": ticker},
         dataType: 'json',
         success: function (json_from_server) {
-            alert(JSON.stringify(json_from_server));
             var updated_price_list = json_from_server[ticker];
-            //source.data['date'] = json_from_server[ticker][0]
             source.data['price'] = json_from_server[ticker][1];
             source.trigger('change');
             var actual_ticker = %r;
             console.log(actual_ticker)
+            radio_button_group.active = 5
         },
         error: function() {
             alert("Oh no, something went wrong. Search for an error " +
@@ -187,13 +186,8 @@ tap_callback = CustomJS(args=dict(div=div),code="""
         data: {"x_coord": x_coordinate, "day":day, "month":month,"year":year},
         dataType: 'json',
         success: function (json_from_server) {
-            //console.log(JSON.stringify(json_from_server));
-            //console.log(json_from_server[x_coordinate])
-            //assigns the list that was sent from the flask route /get_new_data
             div.text = ""
             var list = json_from_server[x_coordinate]
-            //iterates through the list and adds each element (the search query title)
-            //to div
             for(var i =0; i < list.length; i++){
                 var article = list[i][0]
                 var info = list[i][1]
@@ -239,8 +233,8 @@ p.js_on_event('tap', tap_callback)
 
 button2.js_on_event(ButtonClick, button_callback)
 
-radio_button_group = RadioButtonGroup(
-        labels=["1w", "1m", "3m", "6m", "1y", "5y"], active=5, callback=radio_button_callback)
+radio_button_group.callback = radio_button_callback
+
 lay_out = column(radio_button_group, row(text_input, button2), row(p,div))
 
 js,div=components(lay_out, INLINE)

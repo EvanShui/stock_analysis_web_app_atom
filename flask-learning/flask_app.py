@@ -18,8 +18,15 @@ def resize_y_range():
     app.logger.info(
         "Resize basicline ticker: %s", BasicLine.stock_ticker)
     min_val, max_val = y_min_max(BasicLine.data, date_index)
-    if date_index > 3:
+    if date_index == 4:
+        min_val -= 10
+        if min_val < 0:
+            min_val = 0
+        max_val += 10
+    if date_index == 5:
         min_val -= 20
+        if min_val < 0:
+            min_val = 0
         max_val += 20
     app.logger.info(
         "min: %s max: %s", min_val, max_val)
