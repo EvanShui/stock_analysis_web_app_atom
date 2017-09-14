@@ -69,6 +69,38 @@ button2 = Button()
 output=Paragraph()
 output.text = "goodbye"
 
+# str -> lst
+# Hard coded to specifically scrape the google website and returns a list of
+# the website titles from the google search results given a string to initate
+# the search query
+def web_scraper(day, month, year):
+    lst = []
+    opener = urllib.request.build_opener()
+    #use Mozilla because can't access chrome due to insufficient privileges
+    #only use for google
+    #opener.addheaders = [('User-agent', 'Mozilla/5.0')]
+    #url for search query
+    url = "http://www.marketwatch.com/search?q=ATVI&m=Ticker&rpp=15&mp=2005&bd=true&bd=false&bdv=" + str(month) + "%2F" + str(day) + "%2F20" + str(year) + "&rs=true"
+    page = opener.open(url)
+    soup = BeautifulSoup(page, "html.parser")
+    #use beauitful soup to find all divs with the r class, which essentially
+    #is the same as finding all of the divs that contain each individiaul search
+
+    soup_tuple_list = zip(soup.findAll(class_="searchresult"), soup.findAll(class_="deemphasized")[1:-1])
+    #iterating through a tags which includes title and links
+    #for x in soup.findAll(class_="searchresult"):
+    #appends the title of each individual search result to a list
+    #    lst.append(x.a.encode("utf-8"))
+    #iterating through time published and publishing company
+    #gets rid of the prev strings at the beginning and end of the resulting list
+    for article, date in soup_tuple_list:
+        time = date.contents[1][5:]
+        time = re.findall(r'\|.[A-Za-z ]*', time)[0]
+        info = date.contents[0].string + time
+        article.a['target']="_blank"
+        lst.append((article.a.encode("utf-8"),info))
+    return lst
+
 def data_to_CDS(stock_ticker, data, start_date):
     delta_days = np.busday_count(start_date, date.today())
     print(delta_days)
@@ -87,21 +119,40 @@ def data_to_CDS_y(data, start_date):
     adjusted_data = data['close'].tail(delta_days)
     return (np.array(adjusted_data.index, dtype=np.datetime64).tolist(), np.array(adjusted_data.values).tolist())
 
+def y_min_max(data, index):
+    delta_days = np.busday_count(dates[index], date.today())
+    adjusted_data = data.tail(delta_days)
+    maxVal = adjusted_data['close'].max()
+    minVal = adjusted_data['close'].min()
+    print(maxVal, minVal)
+    return ((minVal - 5), (maxVal + 5))
+
 p = figure(x_axis_type="datetime", tools=tools_lst)
 source = data_to_CDS(stock_ticker, data, delta_5_year)
 p.line('date', 'price', source=source, line_width=2)
 
-def web_scraper(x_coord):
-    opener = urllib.request.build_opener()
-    #url for search query
-    url = "https://www.google.com/search?source=hp&q=" + str(x_coord)
-    return url
+p.add_tools(HoverTool(tooltips=[
+    ("date", "@date{%F}"),
+    ("Price", "$@price{0.2f}"),
+    ("index", "$index")
+    ],
+    formatters={
+        "date": "datetime"
+    },
+    mode="vline"
+))
+
+div = Div(text="""Your <a href="https://en.wikipedia.org/wiki/HTML">HTML</a>-supported text is initialized with the <b>text</b> argument.  The
+remaining div arguments are <b>width</b> and <b>height</b>. For this example, those values
+are <i>200</i> and <i>100</i> respectively.""", width=500, height=500)
+#div.css_classes = ["scroll-box"]
 
 def button_click():
     output.text += "hello"
 
-button_callback = CustomJS(args=dict(text_input=text_input, output=output, source=source),code="""
+button_callback = CustomJS(args=dict(div=div, text_input=text_input, output=output, source=source),code="""
      //var plot_data = source.data;
+     div.text=''
      var ticker = text_input.value;
      jQuery.ajax({
         type: 'POST',
@@ -124,21 +175,33 @@ button_callback = CustomJS(args=dict(text_input=text_input, output=output, sourc
     });
     """ % (stock_ticker))
 
-tap_callback = CustomJS(args=dict(output=output), code="""
+tap_callback = CustomJS(args=dict(div=div),code="""
     var x_coordinate = cb_obj['x']
-    console.log("hello")
+    var myDate = new Date(Math.trunc(cb_obj['x']));
+    var year = myDate.getYear() - 100;
+    var month = myDate.getMonth() + 1;
+    var day = myDate.getDate() + 1;
     jQuery.ajax({
         type: 'POST',
-        url: '/get_data',
-        data: {"x_coord": x_coordinate},
+        url: '/get_articles',
+        data: {"x_coord": x_coordinate, "day":day, "month":month,"year":year},
         dataType: 'json',
         success: function (json_from_server) {
+            //console.log(JSON.stringify(json_from_server));
+            //console.log(json_from_server[x_coordinate])
             //assigns the list that was sent from the flask route /get_new_data
-            var url = json_from_server[x_coordinate]
+            div.text = ""
+            var list = json_from_server[x_coordinate]
             //iterates through the list and adds each element (the search query title)
             //to div
+            for(var i =0; i < list.length; i++){
+                var article = list[i][0]
+                var info = list[i][1]
+                var line = "<p>" + article + "<br>" + info + "</p>"
+                var lines = div.text.concat(line)
+                div.text = lines
+            }
             console.log("loading")
-            output.text += url
         },
         error: function() {
             alert("Oh no, something went wrong. Search for an error " +
@@ -153,8 +216,6 @@ radio_button_callback = CustomJS(args=dict(fig=p), code="""
             var active_button = cb_obj.active
             var stock_ticker = %r;
             console.log(active_button)
-            fig.x_range.start = date_ints[active_button]
-            fig.x_range.end = date_ints[6]
             jQuery.ajax({
                 type: 'POST',
                 url: '/resize_y_range',
@@ -162,8 +223,10 @@ radio_button_callback = CustomJS(args=dict(fig=p), code="""
                 dataType: 'json',
                 success: function (json_from_server) {
                     var test = json_from_server[active_button]
-                    console.log("loading")
-                    console.log(test)
+                    fig.y_range.start = test[0];
+                    fig.y_range.end = test[1];
+                    fig.x_range.start = date_ints[active_button]
+                    fig.x_range.end = date_ints[6]
                 },
                 error: function() {
                     alert("Oh no, something went wrong. Search for an error " +
@@ -172,11 +235,13 @@ radio_button_callback = CustomJS(args=dict(fig=p), code="""
             });
         """ % (date_ints, stock_ticker))
 
+p.js_on_event('tap', tap_callback)
+
 button2.js_on_event(ButtonClick, button_callback)
 
 radio_button_group = RadioButtonGroup(
         labels=["1w", "1m", "3m", "6m", "1y", "5y"], active=5, callback=radio_button_callback)
-lay_out = column(radio_button_group, row(text_input, button2), p)
+lay_out = column(radio_button_group, row(text_input, button2), row(p,div))
 
 js,div=components(lay_out, INLINE)
 
