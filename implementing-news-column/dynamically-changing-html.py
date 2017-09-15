@@ -1,18 +1,3 @@
-from bokeh.models.callbacks import CustomJS
-
-callback = CustomJS(code="""
-// the event that triggered the callback is cb_obj:
-var event = cb_obj.value;
-// The event type determines the relevant attributes
-console.log('Tap event occured at x-position: ' + event.x)
-""")
-
-p = figure()
-# execute a callback whenever the plot canvas is tapped
-p.js_on_event('tap', callback)
-The event can be specified as a string such as 'tap' above, or an event class import from the bokeh.events module (i.e. from bokeh.events import Tap).
-
-The following code imports bokeh.events and registers all of the available event classes using the display_event function in order to generate the CustomJS objects. This function is used to update the Div with the event name (always accessible from the event_name attribute) as well as all the other applicable event attributes. The result is a plot that when interacted with, displays the corresponding event on the right:
 
 import numpy as np
 from bokeh.io import show, output_file

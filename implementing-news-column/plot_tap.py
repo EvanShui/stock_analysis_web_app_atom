@@ -22,7 +22,7 @@ counter = 0
 print_lst= [0,0]
 print("global", id(print_lst))
 
-def event_callback(event):
+def event_callback(event, fig):
     print("pyton",event)
     print(event.x)
     print(event.y)
@@ -33,6 +33,7 @@ def event_callback(event):
     print(id(print_lst))
     for i in print_lst:
         print(i)
+    fig.js_on_event(events.Tap, js_event_callback(event=events.Tap, lst=print_lst))
 
 def js_event_callback(event, lst=[]):
     print("js", event)
@@ -62,7 +63,7 @@ point_attributes = ['x', 'y']
 
 
 f.js_on_event(events.Tap, js_event_callback(event=events.Tap, lst=print_lst))
-f.on_event(events.Tap, event_callback)
+f.on_event(events.Tap, event_callback(fig=f))
 
 layout = column(f)
 

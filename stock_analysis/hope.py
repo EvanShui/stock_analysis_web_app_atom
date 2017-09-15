@@ -14,7 +14,7 @@ import pandas as pd
 import requests
 from bokeh.palettes import Spectral4
 import json
-from flask import Flask, jsonify, request
+from flask import Flask, render_template, jsonify, request, url_for
 from jinja2 import Template
 from bokeh.embed import components
 from bokeh.resources import INLINE
@@ -24,29 +24,11 @@ from bs4 import BeautifulSoup
 from urllib.request import Request, urlopen
 import urllib.request
 import re
+from bokeh.resources import INLINE
 
-#HTML template to build the flask app
-SIMPLE_HTML_TEMPLATE = Template('''
-<!DOCTYPE html>
-<html>
-    <head>
-        <script src="https://code.jquery.com/jquery-3.1.0.min.js"></script>
-        {{ js_resources }}
-        {{ css_resources }}
-        <style>
-            .scroll-box {
-                overflow:auto;
-                position: absolute;
-                left: 500px;
-            }
-        </style>
-    </head>
-    <body>
-    {{ plot_div }}
-    {{ plot_script }}
-    </body>
-</html>
-''')
+resources = INLINE
+js_resources = resources.render_js()
+css_resources = resources.render_css()
 
 #string datetime -> CDS
 #creates a dataframe object which includes stock info about the given stock ticker
@@ -137,37 +119,6 @@ def plot(p, source):
 # as well as the stock_ticker of the graph
 
 # ->
-# updates the checkbox_group to include the strings written in the text_input box_zoom
-def button_update():
-    global spectra_index_counter
-    output.text += "triggered"
-    temp_list = []
-    output.text += text_input.value
-    checkbox_button_group.active.append(checkbox_button_group.active[-1] + 1)
-    checkbox_button_group.labels.append(text_input.value.upper())
-    for indexer in range(0,len(dates)):
-        stock_data = data_to_CDS(text_input.value, dates[indexer])
-        line_instance = figures_list[indexer].line('date','price',
-            source=stock_data, line_width=2, color=Spectral4[spectra_index_counter],
-            alpha=0.8, legend=stock_data.data['ticker'][0])
-        temp_list.append(line_instance)
-        figures_list[indexer].add_tools(HoverTool(renderers=[line_instance],
-            tooltips=[
-                ("date", "@date{%F}"),
-                ("Price", "$@price{0.2f}"),
-                ("index", "$index"),
-                ("stock_ticker", "@ticker")
-                ],
-            formatters={
-                "date": "datetime"
-            },
-            mode="vline"
-        ))
-    instances_list.append(temp_list)
-    output.text += str(len(instances_list))
-    spectra_index_counter += 1
-
-# ->
 # toggles the visibility of the chosen stock data when the checkbox group is clicked on
 def plot_update(new):
     switch=checkbox_button_group.active #[0]
@@ -204,72 +155,7 @@ def web_scraper(day, month, year):
             continue
     return lst
 
-for fig, source in fig_source_tuple_list:
-    fig.add_tools(HoverTool(tooltips=[
-        ("date", "@date{%F}"),
-        ("Price", "$@price{0.2f}"),
-        ("index", "$index"),
-        ("stock_ticker", "@ticker")
-        ],
-        formatters={
-            "date": "datetime"
-        },
-        mode="vline"
-    ))
-    #calls the plot function to graph the source data
-    temp_list.append(plot(fig, source))
-instances_list.append(temp_list)
-
-div_list = [Div(text="""Your <a href="https://en.wikipedia.org/wiki/HTML">HTML</a>-supported text is initialized with the <b>text</b> argument.  The
-remaining div arguments are <b>width</b> and <b>height</b>. For this example, those values
-are <i>200</i> and <i>100</i> respectively.""", width=x, height=x) for x in div_dim_lst]
-
-def tap_callback(div_arg):
-    return CustomJS(args=dict(div=div_arg),code="""
-    var x_coordinate = cb_obj['x']
-    var myDate = new Date(Math.trunc(cb_obj['x']));
-    var year = myDate.getYear() - 100;
-    var month = myDate.getMonth() + 1;
-    var day = myDate.getDate() + 1;
-    console.log("hello")
-    jQuery.ajax({
-        type: 'POST',
-        url: '/get_coord',
-        data: {"x_coord": x_coordinate, "day":day, "month":month,"year":year},
-        dataType: 'json',
-        success: function (json_from_server) {
-            //console.log(JSON.stringify(json_from_server));
-            //console.log(json_from_server[x_coordinate])
-            //assigns the list that was sent from the flask route /get_new_data
-            div.text = ""
-            var list = json_from_server[x_coordinate]
-            //iterates through the list and adds each element (the search query title)
-            //to div
-            for(var i =0; i < list.length; i++){
-                var article = list[i][0]
-                var info = list[i][1]
-                var line = "<p>" + article + "<br>" + info + "</p>"
-                var lines = div.text.concat(line)
-                div.text = lines
-            }
-            console.log("loading")
-        },
-        error: function() {
-            alert("Oh no, something went wrong. Search for an error " +
-                  "message in Flask log and browser developer tools.");
-        }
-    });
-    """)
-
-fig_div_list = zip(figures_list, div_list)
-
-#tab_list = [Panel(child=lay_arg, title=date_title) for lay_arg, date_title in layout_date_titles_list]
-tab_list = [Panel(child=fig, title=date_title) for fig,date_title in fig_date_titles_list]
-print(tab_list)
-tabs = Tabs(tabs=tab_list)
-#generating another URL for flask, this time to search the x-coordinate of
-#the mouse and send back the results
-@app.route("/get_coord",methods=['POST'])
+@app.route("/data",methods=['POST'])
 def get_coord():
     app.logger.info(
         "Browser sent the following via AJAX: %s", json.dumps(request.form))
@@ -289,32 +175,121 @@ def get_coord():
     #returns a list in form of json
     return jsonify({variable_to_return: list_to_return})
 
-#main app route
+
 @app.route("/")
-#essentially the main function of this program to create bokeh diagrams
-def simple():
+def home():
+
+    for fig, source in fig_source_tuple_list:
+        fig.add_tools(HoverTool(tooltips=[
+            ("date", "@date{%F}"),
+            ("Price", "$@price{0.2f}"),
+            ("index", "$index"),
+            ("stock_ticker", "@ticker")
+            ],
+            formatters={
+                "date": "datetime"
+            },
+            mode="vline"
+        ))
+        #calls the plot function to graph the source data
+        temp_list.append(plot(fig, source))
+    instances_list.append(temp_list)
+    # ->
+    # updates the checkbox_group to include the strings written in the text_input box_zoom
+    def button_update():
+        global spectra_index_counter
+        output.text += "triggered"
+        temp_list = []
+        output.text += text_input.value
+        checkbox_button_group.active.append(checkbox_button_group.active[-1] + 1)
+        checkbox_button_group.labels.append(text_input.value.upper())
+        for indexer in range(0,len(dates)):
+            stock_data = data_to_CDS(text_input.value, dates[indexer])
+            line_instance = figures_list[indexer].line('date','price',
+                source=stock_data, line_width=2, color=Spectral4[spectra_index_counter],
+                alpha=0.8, legend=stock_data.data['ticker'][0])
+            temp_list.append(line_instance)
+            figures_list[indexer].add_tools(HoverTool(renderers=[line_instance],
+                tooltips=[
+                    ("date", "@date{%F}"),
+                    ("Price", "$@price{0.2f}"),
+                    ("index", "$index"),
+                    ("stock_ticker", "@ticker")
+                    ],
+                formatters={
+                    "date": "datetime"
+                },
+                mode="vline"
+            ))
+        instances_list.append(temp_list)
+        output.text += str(len(instances_list))
+        spectra_index_counter += 1
+
+    def tap_callback(div_arg):
+        return CustomJS(args=dict(div=div_arg),code="""
+        var x_coordinate = cb_obj['x']
+        var myDate = new Date(Math.trunc(cb_obj['x']));
+        var year = myDate.getYear() - 100;
+        var month = myDate.getMonth() + 1;
+        var day = myDate.getDate() + 1;
+        console.log("hello")
+        jQuery.ajax({
+            type: 'POST',
+            headers: {"Content-Type": "application/json"},
+            url: '/data',
+            data: {"x_coord": x_coordinate, "day":day, "month":month,"year":year},
+            dataType: 'json',
+            success: function (json_from_server) {
+                //console.log(JSON.stringify(json_from_server));
+                //console.log(json_from_server[x_coordinate])
+                //assigns the list that was sent from the flask route /get_new_data
+                div.text = ""
+                var list = json_from_server[x_coordinate]
+                //iterates through the list and adds each element (the search query title)
+                //to div
+                for(var i =0; i < list.length; i++){
+                    var article = list[i][0]
+                    var info = list[i][1]
+                    var line = "<p>" + article + "<br>" + info + "</p>"
+                    var lines = div.text.concat(line)
+                    div.text = lines
+                }
+                console.log("loading")
+            },
+            error: function() {
+
+                alert("Oh no, something went wrong. Search for an error " +
+                      "message in Flask log and browser developer tools.");
+            }
+        });
+        """)
+
+    #tab_list = [Panel(child=lay_arg, title=date_title) for lay_arg, date_title in layout_date_titles_list]
+    tab_list = [Panel(child=fig, title=date_title) for fig,date_title in fig_date_titles_list]
+    print(tab_list)
+    tabs = Tabs(tabs=tab_list)
+    #generating another URL for flask, this time to search the x-coordinate of
+    #the mouse and send back the results
     div = Div(text="""Your <a href="https://en.wikipedia.org/wiki/HTML">HTML</a>-supported text is initialized with the <b>text</b> argument.  The
     remaining div arguments are <b>width</b> and <b>height</b>. For this example, those values
-    are <i>200</i> and <i>100</i> respectively.""", width=500, height=500)
-    div.css_classes = ['scroll-box']
+    are <i>200</i> and <i>100</i> respectively.""", width=800, height=500)
     for fig in figures_list:
         fig.js_on_event('tap', tap_callback(div))
     #triggers the button_update function once the button is clicked
-    button.on_click(button_update)
+    button.js_on_event(events.ButtonClick, button_update)
 
     #triggers the plot_update function once any of the checkbox buttons are clicked
-    checkbox_button_group.on_click(plot_update)
-    
-    widgets = column(row(text_input, button),output, checkbox_button_group)
-    lay_out = column(widgets, row(tabs,div))
-    script, div = components(lay_out)
-    html = SIMPLE_HTML_TEMPLATE.render(
-        plot_script=script,
-        plot_div=div,
-        js_resources=INLINE.render_js(),
-        css_resources=INLINE.render_css())
-    #returns the rendered html template with the bokeh graph
-    return encode_utf8(html)
+    checkbox_button_group.js_on_event(events.ButtonClick, plot_update)
 
-#runs on local server @ port 5002
-app.run(debug=True, host="127.0.0.1", port=5002)
+    widgets = column(row(text_input, button),output, checkbox_button_group)
+
+    lay_out = column(widgets, row(tabs,div))
+    script, div = components(lay_out, INLINE)
+    return render_template('index.html',
+                           script=script,
+                           div=div,
+                           js_resources=INLINE.render_js(),
+                           css_resources=INLINE.render_css())
+
+if __name__ == "__main__":
+    app.run(debug=True)

@@ -53,19 +53,21 @@ def my_radio_handler(new):
 
 button_callback = CustomJS(args=dict(fig=p), code="""
             var date_ints = %s;
+            var ticker = %r;
             console.log(cb_obj.active)
             var active_button = cb_obj.active
             //console.log(active_button)
+            console.log(ticker)
             fig.x_range.start = date_ints[active_button]
             fig.x_range.end = date_ints[6]
             //console.log(date_ints)
-        """ % (date_ints))
+        """ % (date_ints, "nflx"))
 
 source = data_to_CDS(data, delta_5_year)
 p.line('date', 'price', source=source, line_width=2)
 
 radio_button_group = RadioButtonGroup(
-        labels=["1w", "1m", "3m", "6m", "1y", "5y"], active=0, callback=button_callback)
+        labels=["1w", "1m", "3m", "6m", "1y", "5y"], active=5, callback=button_callback)
 
 # set a range using a Range1d
 #button.js_on_event(events.ButtonClick, button_callback(date_ints=date_ints))

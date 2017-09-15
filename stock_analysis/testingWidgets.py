@@ -13,6 +13,36 @@ import numpy as np
 import pandas as pd
 import requests
 from bokeh.palettes import Spectral4
+from jinja2 import Template
+from flask import Flask, jsonify, request
+from bokeh.util.string import encode_utf8
+from bokeh.resources import INLINE
+from bokeh.embed import components
+from bokeh.resources import CDN
+from flask import Flask, render_template
+from jinja2 import Template
+
+SIMPLE_HTML_TEMPLATE = Template('''
+<!DOCTYPE html>
+<html>
+    <head>
+        <script src="https://code.jquery.com/jquery-3.1.0.min.js"></script>
+        {{ js_resources }}
+        {{ css_resources }}
+        <style>
+            .scroll-box {
+                overflow:auto;
+                position: absolute;
+                left: 500px;
+            }
+        </style>
+    </head>
+    <body>
+    {{ plot_div }}
+    {{ plot_script }}
+    </body>
+</html>
+''')
 
 #string datetime -> CDS
 #creates a dataframe object which includes stock info about the given stock ticker
@@ -30,6 +60,9 @@ def data_to_CDS(stock_ticker, start_date):
     return source
 
 #constants
+
+#creating the flask app
+app = Flask(__name__)
 
 #to be used in tangent with the click_trigger function to pass the x and y
 #coordinates of the mouse.
@@ -180,21 +213,18 @@ for fig in figures_list:
     # Triggers the click_trigger function when the mouse clicks on the graph
     fig.js_on_event(events.Tap, click_trigger(fig.tools[-1], attributes=point_attributes, stock_string=["hello"]))
 
+
 #triggers the button_update function once the button is clicked
 button.on_click(button_update)
-
 #triggers the plot_update function once any of the checkbox buttons are clicked
 checkbox_button_group.on_click(plot_update)
 
 tab_list = [Panel(child=fig, title=date_title) for fig, date_title in fig_date_titles_list]
 tabs = Tabs(tabs=tab_list)
 
-
 widgets = column(row(text_input, button),output, checkbox_button_group)
 #lay_out = column(widgets,checkbox_button_group)
-lay_out = column(widgets)
-tab_s = row(tabs)
+lay_out = column(widgets, tabs)
 
-# Adds the figure object to the document which will be sent to the Bokeh server
-curdoc().add_root(lay_out)
-curdoc().add_root((tab_s))
+curdoc().add_root(widgets)
+curdoc().add_root(tabs)

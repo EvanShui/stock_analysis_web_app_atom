@@ -3,15 +3,20 @@
   <head>
     <meta charset="utf-8">
     <title>I am the title</title>
+    <script src="https://code.jquery.com/jquery-3.1.0.min.js"></script>
+    <style>
+      .scroll-box {
+        overflow:auto;
+        position: absolute;
+        bottom: 20px;
+      }
+    </style>
     <link rel='stylesheet' type="text/css" href={{url_for('static',filename='css/main.css')}}/>
-    <link rel='stylesheet' type="text/css" href={{cdn_css|safe}}/>
-    <script type="text/javascript" src={{cdn_js|safe}}></script>
+    {{cdn_css|safe}}
+    {{cdn_js|safe}}
   </head>
   <body>
-    <h3> I am a heading</h3>
-    {{current_date|safe}}
     {{js|safe}}
     {{div|safe}}
-    <p> I am a paragraph </p>
   </body>
 </html

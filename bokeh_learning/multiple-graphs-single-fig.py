@@ -14,10 +14,11 @@ from bokeh.palettes import Spectral4
 
 def error(msg):
     output.text += msg
+        var company = hovertool["attributes"][1].tooltips[3][2]
+        window.open("https://www.google.com/search?q=" + day + month + string)
 
 def update_data():
         global spectra_index_counter
-        stock_data = data.DataReader(name=text_input.value, data_source="google", start=start_date, end=date.today())
         stock_data = data_to_CDS(text_input.value, start_date)
         temp = p.line('date', 'price', source=stock_data, line_width=2, color=Spectral4[spectra_index_counter], alpha=0.8, legend=stock_data.data['ticker'][0])
         spectra_index_counter += 1

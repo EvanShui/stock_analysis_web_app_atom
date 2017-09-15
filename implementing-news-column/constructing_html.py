@@ -46,8 +46,14 @@ div = Div(text="""
 <h3> Bye </h3>
 """, width=200, height=100)
 f.js_on_event(events.Tap, display_event(div, lst))
+#div._property_values['position']='aboslute'
+#div._property_values['left'] = 500
+#print(div._property_values['position'] = absolute)
+print(div.css_classes)
 
-output_file("div.html")
+#overflow:auto;
+#position: absolute;
+#left: 500px;
 
 layout = column(row(f, div))
 curdoc().add_root(layout)

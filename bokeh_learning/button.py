@@ -19,6 +19,7 @@ def update():
         output2.text += str(num) + ", " + val
     checkbox_button_group.labels=lst
 
+for i in checkbox_button_group
 
 button.on_click(update)
 #lay_out = layout(column(row(text_input, button),row(output, output2)))

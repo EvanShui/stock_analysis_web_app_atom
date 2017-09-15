@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://code.jquery.com/jquery-3.1.0.min.js"></script>
+    <style>
+      .scroll-box {
+        overflow:auto;
+        position: absolute;
+        left: 500px;
+      }
+    </style>
+    {{ js_resources | safe}}
+    {{ css_resources | safe}}
+  </head>
+  <body>
+    {{ script | safe }}
+	  {{ div | safe }}
+  </body>
+</html>

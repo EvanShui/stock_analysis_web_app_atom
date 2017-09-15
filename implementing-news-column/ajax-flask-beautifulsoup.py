@@ -39,33 +39,29 @@ MY_DATABASE = {
 # str -> lst
 # Hard coded to specifically scrape the google website and returns a list of
 # the website titles from the google search results given a string to initate
-# the search query
 def web_scraper(day, month, year):
     lst = []
     opener = urllib.request.build_opener()
-    #use Mozilla because can't access chrome due to insufficient privileges
-    #only use for google
-    #opener.addheaders = [('User-agent', 'Mozilla/5.0')]
     #url for search query
     url = "http://www.marketwatch.com/search?q=ATVI&m=Ticker&rpp=15&mp=2005&bd=true&bd=false&bdv=" + str(month) + "%2F" + str(day) + "%2F20" + str(year) + "&rs=true"
     page = opener.open(url)
     soup = BeautifulSoup(page, "html.parser")
     #use beauitful soup to find all divs with the r class, which essentially
     #is the same as finding all of the divs that contain each individiaul search
-
     soup_tuple_list = zip(soup.findAll(class_="searchresult"), soup.findAll(class_="deemphasized")[1:-1])
     #iterating through a tags which includes title and links
-    #for x in soup.findAll(class_="searchresult"):
-    #appends the title of each individual search result to a list
-    #    lst.append(x.a.encode("utf-8"))
-    #iterating through time published and publishing company
-    #gets rid of the prev strings at the beginning and end of the resulting list
     for article, date in soup_tuple_list:
-        time = date.contents[1][5:]
-        time = re.findall(r'\|.[A-Za-z ]*', time)[0]
-        info = date.contents[0].string + time
-        article.a['target']="_blank"
-        lst.append((article.a.encode("utf-8"),info))
+        try:
+            time = date.contents[1][5:]
+            time = re.findall(r'\|.[A-Za-z ]*', time)[0]
+            info = date.contents[0].string + time
+            article.a['target']="_blank"
+            lst.append((article.a.encode("utf-8"),info))
+        except:
+            #article.a['target']="_blank"
+            #lst.append((article.a.encode("utf-8")))
+            #print(article.a.encode("utf-8"))
+            continue
     return lst
 
 #generating URL for flask planning on using ajax.post method to retrieve and send back data
@@ -96,6 +92,12 @@ def get_coord():
     day = request.form['day']
     month = request.form['month']
     year = request.form['year']
+    if(int(day) > 31):
+        day = '1';
+        month = int(month) + 1
+        month = str(month)
+    app.logger.info(
+        "day: %s month: %s year: %s", (day, month, year))
     #creates the list of data given the x-coordinate of the mouse and assigns the resulting list
     list_to_return = web_scraper(day, month, year)
     app.logger.info(
