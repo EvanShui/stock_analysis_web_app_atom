@@ -65,7 +65,6 @@ text_input = TextInput()
 button = Button(label="main")
 button2 = Button(label="submit")
 output=Paragraph()
-output.text = "goodbye"
 radio_button_group = RadioButtonGroup(
         labels=["1w", "1m", "3m", "6m", "1y", "5y"], active=5)
 
@@ -80,7 +79,7 @@ def web_scraper(day, month, year):
     #only use for google
     #opener.addheaders = [('User-agent', 'Mozilla/5.0')]
     #url for search query
-    url = "http://www.marketwatch.com/search?q=ATVI&m=Ticker&rpp=15&mp=2005&bd=true&bd=false&bdv=" + str(month) + "%2F" + str(day) + "%2F20" + str(year) + "&rs=true"
+    url = "http://www.marketwatch.com/search?q=" + str(stock_ticker).upper() + "&m=Ticker&rpp=15&mp=2005&bd=true&bd=false&bdv=" + str(month) + "%2F" + str(day) + "%2F20" + str(year) + "&rs=true"
     page = opener.open(url)
     soup = BeautifulSoup(page, "html.parser")
     #use beauitful soup to find all divs with the r class, which essentially
@@ -131,14 +130,13 @@ def y_min_max(data, index):
         minVal = 0
     return ((minVal - 5), (maxVal + 5))
 
-p = figure(x_axis_type="datetime", tools=tools_lst, width=900, height = 500)
+p = figure(x_axis_type="datetime", tools=tools_lst, width=1100, height = 500)
 source = data_to_CDS(stock_ticker, data, delta_5_year)
 p.line('date', 'price', source=source, line_width=2)
 
 p.add_tools(HoverTool(tooltips=[
     ("date", "@date{%F}"),
-    ("Price", "$@price{0.2f}"),
-    ("index", "$index")
+    ("Price", "$@price{0.2f}")
     ],
     formatters={
         "date": "datetime"
