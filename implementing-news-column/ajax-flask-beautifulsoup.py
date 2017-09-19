@@ -58,9 +58,6 @@ def web_scraper(day, month, year):
             article.a['target']="_blank"
             lst.append((article.a.encode("utf-8"),info))
         except:
-            #article.a['target']="_blank"
-            #lst.append((article.a.encode("utf-8")))
-            #print(article.a.encode("utf-8"))
             continue
     return lst
 

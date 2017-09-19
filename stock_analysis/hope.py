@@ -178,7 +178,6 @@ def get_coord():
 
 @app.route("/")
 def home():
-
     for fig, source in fig_source_tuple_list:
         fig.add_tools(HoverTool(tooltips=[
             ("date", "@date{%F}"),

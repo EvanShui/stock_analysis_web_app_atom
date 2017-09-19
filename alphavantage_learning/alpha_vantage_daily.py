@@ -55,7 +55,9 @@ def get_data(stock_ticker):
 
 data,meta_data = get_data("nflx")
 
-print(data.head())
+
+#print(list(int(data.tail(1).values)))
+print([int(x) for x in (data.tail(1).values)[0]])
 
 def data_to_CDS(stock_ticker, data, start_date):
     delta_days = np.busday_count(start_date, date.today())
@@ -67,7 +69,6 @@ def data_to_CDS(stock_ticker, data, start_date):
         price=adjusted_data['close'].values,
         index=adjusted_data['ticker']
     ))
-    print(source.data['index'][0])
     return source
 
 def y_min_max(data, index):
@@ -75,12 +76,12 @@ def y_min_max(data, index):
     adjusted_data = data.tail(delta_days)
     maxVal = adjusted_data['close'].max()
     minVal = adjusted_data['close'].min()
-    print(maxVal, minVal)
     return ((minVal - 5), (maxVal + 5))
 
 #print(data['close'].tail(7))
 #print(type(data.index[0]))
 source = ColumnDataSource(data)
+
 #print(source.data['close'].index)
 
 #print(type(source2.data['date'][0]))
@@ -90,6 +91,4 @@ f = figure(x_axis_type="datetime")
 f.line('date', 'price', source=source, line_width=2)
 f.x_range = Range1d(start=dates[4],end=date.today())
 y_limit = (y_min_max(data, 4))
-f.y_range.start = y_limit[0]
-f.y_range.end = y_limit[1]
 curdoc().add_root(f)
